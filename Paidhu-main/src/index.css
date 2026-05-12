@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-paidhu-maroon: #800000;
+  --color-paidhu-yellow: #FFD100;
+  --color-paidhu-teal: #00A896;
+  --color-paidhu-cream: #FFF9F2;
+  --color-paidhu-slate: #2D3748;
+  --color-paidhu-peach: #FFEEDB;
+  --color-paidhu-mint: #E2F1E7;
+  
+  --font-brand: "Fredoka", sans-serif;
+  --font-sans: "Nunito", sans-serif;
+}
+
+:root {
+  --paidhu-maroon: #800000;
+  --paidhu-yellow: #FFD100;
+  --paidhu-teal: #00A896;
+  --paidhu-cream: #FFF9F2;
+  --paidhu-slate: #2D3748;
+  --paidhu-peach: #FFEEDB;
+  --paidhu-mint: #E2F1E7;
+}
+
+body {
+  background-color: var(--paidhu-cream);
+  color: var(--paidhu-slate);
+  font-family: var(--font-sans);
+}
