@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
     Heart, ShoppingCart, Menu, ArrowRight, Leaf, ShieldCheck,
-    Sun, Star, Camera, Globe, Search,
+    Star, Camera, Globe, Search,
     X, Sparkles, Droplets, User, LayoutDashboard, Smile,
     Plus, Trash2, Gift, ChevronRight, ChevronDown
 } from 'lucide-react';
 import AdminDashboard from './AdminDashboard';
 import ShopAllView from './ShopAllView';
+import CheckoutView from './CheckoutView';
+import OrderSuccess from './OrderSuccess';
+import MyOrdersView from './MyOrdersView';
 
 interface LandingPageProps {
-    onStart?: () => void;
 }
 
-export default function LandingPage({ onStart }: LandingPageProps) {
-    const API_URL = "http://localhost:5000";
+export default function LandingPage({ }: LandingPageProps) {
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
     const [scrolled, setScrolled] = useState(false);
-    const [currentView, setCurrentView] = useState<'home' | 'shopAll'>('home');
+    const [currentView, setCurrentView] = useState<'home' | 'shopAll' | 'productDetail' | 'checkout' | 'orderSuccess' | 'myOrders'>('home');
     const [selectedShopCategory, setSelectedShopCategory] = useState<string>('All');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -53,6 +55,28 @@ export default function LandingPage({ onStart }: LandingPageProps) {
     });
     const [isWishlistOpen, setIsWishlistOpen] = useState(false);
     const [activeDetailTab, setActiveDetailTab] = useState('description');
+    const [modalMainImage, setModalMainImage] = useState<string | null>(null);
+    const [selectedQuantity, setSelectedQuantity] = useState(1);
+    const [selectedSize, setSelectedSize] = useState<string>('');
+    const [placedOrderId, setPlacedOrderId] = useState<string>('');
+
+    const totalAmount = cart.reduce((sum, item) => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseInt(item.quantity) || 1;
+        return sum + (price * qty);
+    }, 0);
+
+    useEffect(() => {
+        if (selectedProduct) {
+            setModalMainImage(selectedProduct.image_url);
+            setSelectedQuantity(1);
+            const sizes = parseField(selectedProduct.sizes);
+            setSelectedSize(sizes.length > 0 ? sizes[0] : '');
+            if (currentView !== 'productDetail' && !isAdminView) {
+                setCurrentView('productDetail');
+            }
+        }
+    }, [selectedProduct]);
     const [activeTab, setActiveTab] = useState('Bestsellers');
 
     // FAQ States & Data
@@ -92,6 +116,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
     const addToCart = (product: any, size?: string) => {
         const cartItem = {
             ...product,
+            quantity: 1,
             selectedSize: size || (Array.isArray(product.sizes) ? product.sizes[0] : ''),
             cartId: `${product.id}-${Date.now()}`
         };
@@ -161,6 +186,51 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             setAdminProducts(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error("Failed to fetch admin products", err);
+        }
+    };
+
+    const getImageUrl = (url: string) => {
+        if (!url) return images.saffron;
+        if (url.startsWith('http')) return url;
+        return `${API_URL}${url}`;
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('paidhu_token');
+        setCurrentUser(null);
+        setIsAdminView(false);
+        setIsAccountDropdownOpen(false);
+    };
+
+    const handlePlaceOrder = async (shippingData: any) => {
+        if (!currentUser) {
+            setAuthMode('login');
+            setIsLoginModalOpen(true);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/api/orders`, {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${localStorage.getItem('paidhu_token')}`,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({
+                    ...shippingData,
+                    items: cart,
+                    totalAmount
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            setPlacedOrderId(data.orderId);
+            setCart([]);
+            localStorage.removeItem('paidhu_cart');
+            setCurrentView('orderSuccess');
+        } catch (err: any) {
+            alert("Order failed: " + err.message);
         }
     };
 
@@ -246,20 +316,20 @@ export default function LandingPage({ onStart }: LandingPageProps) {
 
         return (
             <div className="relative overflow-hidden rounded-[40px] p-1 lg:p-2 bg-white/30 backdrop-blur-xl border-4 border-white shadow-2xl">
-                <div className="absolute -top-24 -right-24 w-64 h-64 bg-paidhu-yellow/40 rounded-full blur-3xl animate-pulse"></div>
-                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-paidhu-maroon/40 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-paidhu-maroon/10 rounded-full blur-3xl animate-pulse"></div>
+                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-paidhu-maroon/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
                 
                 <div className="relative z-10 bg-white rounded-[32px] p-8 lg:p-12 min-h-[400px] flex flex-col justify-center">
                     {step === 1 && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="space-y-4">
-                                <span className="inline-block px-4 py-1.5 bg-paidhu-mint text-paidhu-teal rounded-full text-xs font-bold uppercase tracking-widest">Step 01</span>
-                                <h3 className="text-4xl lg:text-5xl font-brand font-bold text-paidhu-slate">Hello! What's <br/><span className="text-paidhu-teal">your name?</span></h3>
+                                <span className="inline-block px-4 py-1.5 bg-paidhu-peach text-paidhu-maroon rounded-full text-xs font-bold uppercase tracking-widest">Step 01</span>
+                                <h3 className="text-4xl lg:text-5xl font-brand font-bold text-paidhu-slate">Hello! What's <br/><span className="text-paidhu-maroon">your name?</span></h3>
                             </div>
                             <input 
                                 type="text" 
                                 placeholder="Type your name here..." 
-                                className="w-full text-2xl lg:text-3xl font-brand font-medium border-b-4 border-paidhu-peach focus:border-paidhu-teal outline-none py-4 bg-transparent transition-all"
+                                className="w-full text-2xl lg:text-3xl font-brand font-medium border-b-4 border-paidhu-peach focus:border-paidhu-maroon outline-none py-4 bg-transparent transition-all"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 onKeyPress={(e) => e.key === 'Enter' && formData.name && nextStep()}
@@ -282,7 +352,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     <button 
                                         key={opt}
                                         onClick={() => { setFormData({ ...formData, interest: opt }); nextStep(); }}
-                                        className={`p-6 rounded-2xl border-4 font-brand font-bold text-xl transition-all text-left ${formData.interest === opt ? 'border-paidhu-maroon bg-paidhu-mint text-paidhu-maroon' : 'border-paidhu-peach hover:border-paidhu-yellow bg-white'}`}
+                                        className={`p-6 rounded-2xl border-4 font-brand font-bold text-xl transition-all text-left ${formData.interest === opt ? 'border-paidhu-maroon bg-paidhu-peach text-paidhu-maroon' : 'border-paidhu-peach hover:border-paidhu-maroon bg-white'}`}
                                     >
                                         {opt}
                                     </button>
@@ -293,12 +363,12 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     {step === 3 && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                             <div className="space-y-4">
-                                <span className="inline-block px-4 py-1.5 bg-paidhu-mint text-paidhu-teal rounded-full text-xs font-bold uppercase tracking-widest">Step 03</span>
-                                <h3 className="text-4xl lg:text-5xl font-brand font-bold text-paidhu-slate">Any special <br/><span className="text-paidhu-yellow drop-shadow-sm">requests?</span></h3>
+                                <span className="inline-block px-4 py-1.5 bg-paidhu-peach text-paidhu-maroon rounded-full text-xs font-bold uppercase tracking-widest">Step 03</span>
+                                <h3 className="text-4xl lg:text-5xl font-brand font-bold text-paidhu-slate">Any special <br/><span className="text-paidhu-maroon drop-shadow-sm">requests?</span></h3>
                             </div>
                             <textarea 
                                 placeholder="Type your message here..." 
-                                className="w-full text-xl font-brand font-medium border-b-4 border-paidhu-peach focus:border-paidhu-yellow outline-none py-4 bg-transparent transition-all min-h-[150px]"
+                                className="w-full text-xl font-brand font-medium border-b-4 border-paidhu-peach focus:border-paidhu-maroon outline-none py-4 bg-transparent transition-all min-h-[150px]"
                                 value={formData.message}
                                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                             />
@@ -309,8 +379,8 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     )}
                     {step === 4 && (
                         <div className="text-center space-y-8 animate-in zoom-in duration-500">
-                            <div className="w-32 h-32 bg-paidhu-mint rounded-full flex items-center justify-center mx-auto mb-6">
-                                <Sparkles className="w-16 h-16 text-paidhu-teal" />
+                            <div className="w-32 h-32 bg-paidhu-peach rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Sparkles className="w-16 h-16 text-paidhu-maroon" />
                             </div>
                             <h3 className="text-5xl font-brand font-bold text-paidhu-slate">Thanks, {formData.name}!</h3>
                             <p className="text-xl text-gray-500 font-bold max-w-sm mx-auto">We've slurped your request and our team will get back to you within 24 hours.</p>
@@ -338,7 +408,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     67% { border-radius: 100% 60% 60% 100% / 100% 100% 60% 60%; }
                 }
                 .slurp-bg {
-                    background: radial-gradient(circle at 50% 50%, var(--paidhu-yellow) 0%, var(--paidhu-maroon) 100%);
+                    background: radial-gradient(circle at 50% 50%, var(--paidhu-peach) 0%, var(--paidhu-maroon) 100%);
                     animation: slurp-pulse 10s ease infinite;
                 }
 
@@ -415,7 +485,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         {currentUser?.role === 'admin' && (
                             <button
                                 onClick={() => setIsAdminView(!isAdminView)}
-                                className="hidden sm:flex items-center gap-1.5 text-xs font-bold bg-paidhu-yellow px-4 py-2 rounded-full text-paidhu-slate hover:bg-paidhu-yellow/80 transition-colors shadow-sm font-brand"
+                                className="hidden sm:flex items-center gap-1.5 text-xs font-bold bg-paidhu-peach px-4 py-2 rounded-full text-paidhu-slate hover:bg-paidhu-peach/80 transition-colors shadow-sm font-brand"
                             >
                                 {isAdminView ? 'Shop' : 'Admin'}
                             </button>
@@ -433,12 +503,13 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                                 <p className="font-brand font-bold text-paidhu-slate truncate">{currentUser.name}</p>
                                                 <p className="text-xs font-bold text-paidhu-maroon uppercase tracking-wider">{currentUser.role}</p>
                                             </div>
-                                            <button onClick={() => { setCurrentUser(null); localStorage.removeItem('paidhu_token'); setIsAccountDropdownOpen(false); setIsAdminView(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-maroon hover:text-white transition-colors">Logout 👋</button>
+                                            <button onClick={() => { setCurrentView('myOrders'); setIsAccountDropdownOpen(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-maroon hover:text-white transition-colors">My Orders 📦</button>
+                                            <button onClick={() => { handleLogout(); setIsAccountDropdownOpen(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-maroon hover:text-white transition-colors border-t border-gray-100">Logout 👋</button>
                                         </>
                                     ) : (
                                         <>
                                             <button onClick={() => { setLoginRole('customer'); setIsLoginModalOpen(true); setIsAccountDropdownOpen(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-maroon hover:text-white transition-colors">Customer Login</button>
-                                            <button onClick={() => { setLoginRole('admin'); setIsLoginModalOpen(true); setIsAccountDropdownOpen(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-yellow transition-colors">Admin Login</button>
+                                            <button onClick={() => { setLoginRole('admin'); setIsLoginModalOpen(true); setIsAccountDropdownOpen(false); }} className="block w-full text-left px-5 py-3 text-sm font-bold text-paidhu-slate hover:bg-paidhu-peach transition-colors">Admin Login</button>
                                         </>
                                     )}
                                 </div>
@@ -448,7 +519,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         <button onClick={() => setIsWishlistOpen(true)} className="bg-white p-2.5 rounded-full shadow-sm text-paidhu-maroon hover:bg-paidhu-mint transition-colors relative">
                             <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'fill-paidhu-maroon' : ''}`} />
                             {wishlist.length > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-paidhu-teal text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">{wishlist.length}</span>
+                                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-paidhu-maroon text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">{wishlist.length}</span>
                             )}
                         </button>
 
@@ -525,13 +596,13 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         ))}
                         <button 
                             onClick={() => { setIsWishlistOpen(true); setMobileMenuOpen(false); }}
-                            className="text-left text-paidhu-slate hover:text-paidhu-teal flex items-center gap-2 border-t-2 border-paidhu-peach pt-4"
+                            className="text-left text-paidhu-slate hover:text-paidhu-maroon flex items-center gap-2 border-t-2 border-paidhu-peach pt-4"
                         >
-                            <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'fill-paidhu-teal text-paidhu-teal' : ''}`} />
+                            <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'fill-paidhu-maroon text-paidhu-maroon' : ''}`} />
                             My Wishlist {wishlist.length > 0 && `(${wishlist.length})`}
                         </button>
                         {currentUser?.role === 'admin' && (
-                            <button onClick={() => { setIsAdminView(true); setMobileMenuOpen(false); }} className="text-left text-paidhu-yellow font-bold border-t-2 border-paidhu-peach pt-6 mt-4">Admin Panel</button>
+                            <button onClick={() => { setIsAdminView(true); setMobileMenuOpen(false); }} className="text-left text-paidhu-peach font-bold border-t-2 border-paidhu-peach pt-6 mt-4">Admin Panel</button>
                         )}
                     </div>
 
@@ -550,13 +621,256 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     wishlist={wishlist} 
                     addToCart={addToCart} 
                     toggleWishlist={toggleWishlist} 
+                    onProductClick={setSelectedProduct}
                     initialCategory={selectedShopCategory}
                 />
+            ) : currentView === 'checkout' ? (
+                <CheckoutView 
+                    cart={cart}
+                    user={currentUser}
+                    totalAmount={totalAmount}
+                    onPlaceOrder={handlePlaceOrder}
+                    onBack={() => setCurrentView('home')}
+                    API_URL={import.meta.env.VITE_API_URL || "http://localhost:5001"}
+                    token={localStorage.getItem('paidhu_token') || ''}
+                />
+            ) : currentView === 'orderSuccess' ? (
+                <OrderSuccess 
+                    orderId={placedOrderId}
+                    onViewOrders={() => setCurrentView('myOrders')}
+                    onContinueShopping={() => setCurrentView('home')}
+                />
+            ) : currentView === 'myOrders' ? (
+                <MyOrdersView 
+                    API_URL={API_URL}
+                    token={localStorage.getItem('paidhu_token') || ''}
+                    onBack={() => setCurrentView('home')}
+                />
+            ) : currentView === 'productDetail' && selectedProduct ? (
+                <div className="bg-[#f7f3f0] min-h-screen pb-20">
+                    {/* BREADCRUMBS */}
+                    <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
+                        <nav className="flex items-center gap-2 text-sm font-medium text-gray-500">
+                            <button onClick={() => setCurrentView('home')} className="hover:text-paidhu-maroon transition-colors">Home</button>
+                            <span>/</span>
+                            <span className="capitalize">{selectedProduct.category}</span>
+                            <span>/</span>
+                            <span className="text-paidhu-slate font-bold">{selectedProduct.name}</span>
+                        </nav>
+                        <button onClick={() => setCurrentView('home')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                            <ChevronRight className="w-5 h-5 rotate-180" />
+                        </button>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="flex flex-col lg:flex-row gap-12 bg-transparent">
+                            {/* LEFT: MEDIA SECTION */}
+                            <div className="lg:w-1/2 space-y-4">
+                                <div className="bg-white rounded-2xl overflow-hidden relative group aspect-square flex items-center justify-center p-12 border border-gray-100 shadow-sm">
+                                    {selectedProduct.on_sale && (
+                                        <div className="absolute top-6 left-6 bg-red-500 text-white font-bold px-4 py-1 text-xs uppercase tracking-widest z-10">ON SALE!</div>
+                                    )}
+                                    <button className="absolute top-6 right-6 p-2 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Camera className="w-5 h-5 text-gray-400" />
+                                    </button>
+                                    
+                                    {/* Navigation Arrows */}
+                                    <button className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-gray-300 hover:text-paidhu-maroon transition-colors">
+                                        <ChevronDown className="w-8 h-8 rotate-90" />
+                                    </button>
+                                    <button className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-gray-300 hover:text-paidhu-maroon transition-colors">
+                                        <ChevronDown className="w-8 h-8 -rotate-90" />
+                                    </button>
+
+                                    <img 
+                                        src={getImageUrl(modalMainImage || selectedProduct.image_url)} 
+                                        alt={selectedProduct.name} 
+                                        className="max-w-full max-h-full object-contain" 
+                                    />
+                                </div>
+                                
+                                <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                                    {[selectedProduct.image_url, ...parseField(selectedProduct.gallery_images)].map((img, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            onClick={() => setModalMainImage(img)}
+                                            className={`w-20 h-20 bg-white rounded-xl flex-shrink-0 border-2 transition-all cursor-pointer p-2 ${modalMainImage === img ? 'border-paidhu-maroon' : 'border-transparent hover:border-paidhu-maroon/30'}`}
+                                        >
+                                            <img src={getImageUrl(img)} className="w-full h-full object-contain" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* RIGHT: CONTENT SECTION */}
+                            <div className="lg:w-1/2 space-y-8">
+                                <div className="space-y-4">
+                                    <h1 className="text-4xl font-brand font-bold text-paidhu-slate">{selectedProduct.name}</h1>
+                                    <div className="flex items-center gap-4">
+                                        <p className="text-3xl font-bold text-paidhu-maroon">
+                                            {selectedProduct.on_sale && selectedProduct.original_price && (
+                                                <span className="text-xl text-gray-400 line-through mr-3 font-normal">₹{parseFloat(selectedProduct.original_price).toFixed(2)}</span>
+                                            )}
+                                            ₹{parseFloat(selectedProduct.price).toFixed(2)}
+                                        </p>
+                                    </div>
+                                    <div className="text-gray-600 leading-relaxed font-medium">
+                                        {selectedProduct.short_description || selectedProduct.description}
+                                    </div>
+                                </div>
+
+                                {/* OPTIONS */}
+                                <div className="space-y-6 pt-6 border-t border-gray-200">
+                                    {parseField(selectedProduct.sizes).length > 0 && (
+                                        <div className="space-y-3">
+                                            <label className="text-sm font-bold text-paidhu-slate uppercase tracking-widest">size</label>
+                                            <div className="relative max-w-xs">
+                                                <select 
+                                                    value={selectedSize}
+                                                    onChange={(e) => setSelectedSize(e.target.value)}
+                                                    className="w-full bg-white border border-gray-200 px-4 py-3 rounded-md outline-none focus:border-paidhu-maroon appearance-none font-bold text-paidhu-slate"
+                                                >
+                                                    <option value="" disabled>Choose an option</option>
+                                                    {parseField(selectedProduct.sizes).map((s: string) => (
+                                                        <option key={s} value={s}>{s}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-wrap items-center gap-4 pt-4">
+                                        <div className="flex items-center border border-gray-200 bg-white rounded-md">
+                                            <button 
+                                                onClick={() => setSelectedQuantity(Math.max(1, selectedQuantity - 1))}
+                                                className="px-4 py-3 text-gray-400 hover:text-paidhu-maroon transition-colors"
+                                            >
+                                                <Plus className="w-4 h-4 rotate-45" />
+                                            </button>
+                                            <input 
+                                                type="number" 
+                                                value={selectedQuantity}
+                                                onChange={(e) => setSelectedQuantity(parseInt(e.target.value) || 1)}
+                                                className="w-12 text-center font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                            />
+                                            <button 
+                                                onClick={() => setSelectedQuantity(selectedQuantity + 1)}
+                                                className="px-4 py-3 text-gray-400 hover:text-paidhu-maroon transition-colors"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => addToCart({ ...selectedProduct, price: parseFloat(selectedProduct.price) * selectedQuantity })}
+                                            className="bg-paidhu-maroon text-white px-10 py-3.5 rounded-md font-bold uppercase tracking-widest text-sm hover:bg-paidhu-maroon/90 transition-all shadow-md"
+                                        >
+                                            ADD TO CART
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-8 pt-4">
+                                        <button onClick={() => toggleWishlist(selectedProduct)} className="flex items-center gap-2 text-xs font-bold text-paidhu-slate hover:text-paidhu-maroon transition-colors uppercase tracking-wider">
+                                            <Heart className={`w-4 h-4 ${wishlist.find(i => i.id === selectedProduct.id) ? 'fill-paidhu-maroon text-paidhu-maroon' : ''}`} /> Add to Wishlist
+                                        </button>
+                                        <button className="flex items-center gap-2 text-xs font-bold text-paidhu-slate hover:text-paidhu-maroon transition-colors uppercase tracking-wider">
+                                            <Globe className="w-4 h-4" /> Share
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* META */}
+                                <div className="space-y-2 pt-8 border-t border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                    <p>SKU: <span className="text-gray-600">{selectedProduct.sku || 'N/A'}</span></p>
+                                    <p>Category: <span className="text-paidhu-maroon">{selectedProduct.category}</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* TABS & DESCRIPTION */}
+                        <div className="mt-20 border-t border-gray-200 pt-12">
+                            <div className="flex justify-center gap-12 border-b border-gray-100 mb-12">
+                                {['description', 'additional', 'reviews'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveDetailTab(tab)}
+                                        className={`pb-4 text-sm font-bold uppercase tracking-widest transition-all relative ${activeDetailTab === tab ? 'text-paidhu-maroon' : 'text-gray-400 hover:text-paidhu-maroon'}`}
+                                    >
+                                        {tab}
+                                        {activeDetailTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-paidhu-maroon" />}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div className="max-w-4xl mx-auto leading-relaxed text-gray-600">
+                                {activeDetailTab === 'description' && (
+                                    <div className="space-y-6">
+                                        <h3 className="text-xl font-bold text-paidhu-slate">Description</h3>
+                                        <p>{selectedProduct.description}</p>
+                                        {selectedProduct.eligibility_details && (
+                                            <div className="pt-6">
+                                                <h4 className="text-sm font-bold text-paidhu-slate uppercase tracking-widest mb-3">Usage Instructions</h4>
+                                                <p className="text-sm">{selectedProduct.eligibility_details}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {activeDetailTab === 'additional' && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-xl font-bold text-paidhu-slate">Additional Information</h3>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {selectedProduct.weight_g && <p className="flex justify-between py-2 border-b border-gray-50"><span className="font-bold">Weight</span> <span>{selectedProduct.weight_g}g</span></p>}
+                                            {(selectedProduct.length_cm || selectedProduct.width_cm || selectedProduct.height_cm) && (
+                                                <p className="flex justify-between py-2 border-b border-gray-50"><span className="font-bold">Dimensions</span> <span>{selectedProduct.length_cm} x {selectedProduct.width_cm} x {selectedProduct.height_cm} cm</span></p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {activeDetailTab === 'reviews' && (
+                                    <div className="text-center py-12 bg-white rounded-2xl border border-gray-50 shadow-sm">
+                                        <Star className="w-12 h-12 text-gray-100 mx-auto mb-4" />
+                                        <p className="text-gray-400 font-bold">No reviews yet. Be the first to review!</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* RELATED PRODUCTS */}
+                        <div className="mt-24 border-t border-gray-200 pt-20">
+                            <h2 className="text-3xl font-brand font-bold text-paidhu-slate text-center mb-12">Related Products</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                                {products.filter(p => p.category === selectedProduct.category && p.id !== selectedProduct.id).slice(0, 4).map(rp => (
+                                    <div key={rp.id} className="group cursor-pointer" onClick={() => { setSelectedProduct(rp); window.scrollTo(0,0); }}>
+                                        <div className="bg-white rounded-xl aspect-square flex items-center justify-center p-8 mb-4 border border-gray-100 group-hover:border-paidhu-maroon/30 transition-all shadow-sm">
+                                            <img src={getImageUrl(rp.image_url)} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform" />
+                                        </div>
+                                        <p className="text-sm font-bold text-paidhu-slate text-center truncate px-2">{rp.name}</p>
+                                        <p className="text-paidhu-maroon font-bold text-center">₹{parseFloat(rp.price).toFixed(2)}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* WHATSAPP FLOATING BUTTON */}
+                    <a 
+                        href="https://wa.me/yournumber" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="fixed bottom-8 right-8 z-[100] flex items-center gap-3 bg-white pl-6 pr-4 py-3 rounded-full shadow-2xl border border-gray-100 hover:-translate-y-1 transition-all group"
+                    >
+                        <span className="text-sm font-bold text-gray-600">Contact us</span>
+                        <div className="bg-[#25D366] p-2.5 rounded-full text-white shadow-lg group-hover:scale-110 transition-transform">
+                            <Droplets className="w-6 h-6 fill-white" />
+                        </div>
+                    </a>
+                </div>
             ) : (
                 /* ── STOREFRONT RENDERER ── */
                 <>
                     {/* HERO SECTION - Playful & Vibrant */}
-                    <section className="relative min-h-[90vh] flex items-center pt-24 pb-32 overflow-hidden bg-paidhu-yellow">
+                    <section className="relative min-h-[90vh] flex items-center pt-24 pb-32 overflow-hidden bg-paidhu-peach">
                         {/* Wavy bottom divider */}
                         <div className="absolute bottom-0 left-0 right-0 w-full overflow-hidden leading-none z-20">
                             <svg className="relative block w-full h-[80px]" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
@@ -565,7 +879,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         </div>
 
                         {/* Decorative Blobs */}
-                        <div className="absolute top-20 right-10 w-64 h-64 bg-paidhu-teal blob-shape opacity-20"></div>
+                        <div className="absolute top-20 right-10 w-64 h-64 bg-paidhu-maroon blob-shape opacity-20"></div>
                         <div className="absolute bottom-40 left-10 w-48 h-48 bg-paidhu-maroon blob-shape opacity-20" style={{ animationDelay: '2s' }}></div>
 
                         <div className="max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-12 lg:gap-8 items-center relative z-10">
@@ -601,7 +915,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                 </div>
                                 <div className="absolute top-20 right-80 bg-white px-6 py-4 rounded-3xl shadow-xl z-30 flex items-center gap-3 border-2 border-paidhu-mint rotate-6 hover:rotate-0 transition-transform cursor-pointer">
                                     <div className="w-12 h-12 bg-paidhu-mint rounded-full flex items-center justify-center">
-                                        <ShieldCheck className="w-6 h-6 text-paidhu-teal" />
+                                        <ShieldCheck className="w-6 h-6 text-paidhu-maroon" />
                                     </div>
                                     <div>
                                         <p className="text-lg font-brand font-bold text-paidhu-slate">No Maida!</p>
@@ -645,15 +959,19 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     .filter(p => activeTab === 'Bestsellers' || activeTab === 'New Launches' || activeTab === 'Deals of the Day' || p.category === activeTab)
                                     .slice(0, 4)
                                     .map((prod) => (
-                                        <div key={prod.id} className="group flex flex-col bg-paidhu-cream/30 rounded-[32px] p-5 border-2 border-paidhu-peach/20 hover:border-paidhu-maroon/20 hover:shadow-xl transition-all duration-500 relative">
+                                        <div 
+                                            key={prod.id} 
+                                            onClick={() => setSelectedProduct(prod)}
+                                            className="group flex flex-col bg-paidhu-cream/30 rounded-[32px] p-5 border-2 border-paidhu-peach/20 hover:border-paidhu-maroon/20 hover:shadow-xl transition-all duration-500 relative cursor-pointer"
+                                        >
                                             {/* Badge */}
-                                            <div className="absolute top-4 left-4 z-10 bg-paidhu-yellow text-paidhu-slate text-[10px] font-black uppercase px-3 py-1.5 rounded-full shadow-sm tracking-widest">
+                                            <div className="absolute top-4 left-4 z-10 bg-paidhu-peach text-paidhu-slate text-[10px] font-black uppercase px-3 py-1.5 rounded-full shadow-sm tracking-widest">
                                                 {activeTab === 'Bestsellers' ? 'Top Rated' : 'Just In'}
                                             </div>
 
                                             {/* Image */}
                                             <div className="aspect-square w-full mb-6 bg-white rounded-[24px] overflow-hidden p-6 relative group-hover:bg-paidhu-cream transition-colors duration-500">
-                                                <img src={prod.image_url || images.saffron} alt={prod.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
+                                                <img src={getImageUrl(prod.image_url)} alt={prod.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500" />
                                                 
                                                 {/* Wishlist Toggle */}
                                                 <button 
@@ -673,14 +991,17 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-2xl font-brand font-bold text-paidhu-maroon">₹{parseFloat(prod.price).toFixed(0)}</span>
                                                     <span className="text-sm text-gray-400 line-through font-bold">₹{(parseFloat(prod.price) * 1.2).toFixed(0)}</span>
-                                                    <span className="bg-paidhu-mint text-paidhu-teal text-[10px] font-black px-2 py-1 rounded-lg">20% OFF</span>
+                                                    <span className="bg-paidhu-mint text-paidhu-maroon text-[10px] font-black px-2 py-1 rounded-lg">20% OFF</span>
                                                 </div>
                                             </div>
 
                                             {/* Add to Cart Footer */}
                                             <div className="mt-6">
                                                 <button 
-                                                    onClick={() => addToCart(prod)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        addToCart(prod);
+                                                    }}
                                                     className="w-full bg-paidhu-maroon text-white py-4 rounded-2xl font-brand font-bold flex items-center justify-between px-6 hover:bg-paidhu-maroon/90 transition-all shadow-lg hover:-translate-y-1 active:scale-95"
                                                 >
                                                     <span>Add To Cart</span>
@@ -706,7 +1027,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     </section>
 
                     {/* ── SCROLLING MARQUEE BANNER ── */}
-                    <div className="bg-[#C1272D] text-white py-4 relative flex overflow-hidden whitespace-nowrap w-full">
+                    <div className="bg-paidhu-maroon text-white py-4 relative flex overflow-hidden whitespace-nowrap w-full">
                         <div className="animate-marquee flex items-center">
                             {Array.from({ length: 4 }).map((_, groupIndex) => (
                                 <div key={groupIndex} className="flex items-center gap-12 px-6">
@@ -737,14 +1058,14 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                             {/* Categories Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                                 {[
-                                    { title: 'PURE\nSAFFRON', cat: 'Pure Saffron', img: images.saffron, bg: 'bg-[#FCA5B9]', textColor: 'text-[#4A3B32]' },
-                                    { title: 'BLOOM\nCOOKIES', cat: 'Bloom Cookies', img: images.cookies, bg: 'bg-[#F9C846]', textColor: 'text-[#4A3B32]' },
-                                    { title: 'MEDLEY\nTEAS', cat: 'Medley Teas', img: images.tea, bg: 'bg-[#93D5F0]', textColor: 'text-[#4A3B32]' },
-                                    { title: 'PETAL\nJAMS', cat: 'Petal Jams', img: images.jam, bg: 'bg-[#6D4C41]', textColor: 'text-white' },
-                                    { title: 'WELLNESS\nPOWDERS', cat: 'Wellness Powders', img: images.bloom, bg: 'bg-[#9DCB60]', textColor: 'text-[#4A3B32]' },
-                                    { title: 'GIFT\nHAMPERS', cat: 'Gift Hampers', img: images.saffron, bg: 'bg-[#EF3D4A]', textColor: 'text-white' },
-                                    { title: 'KIDS\nSPECIAL', cat: 'Kids Special', img: images.cookies, bg: 'bg-[#C2A38D]', textColor: 'text-[#4A3B32]' },
-                                    { title: 'HEALTHY\nSNACKS', cat: 'Healthy Snacks', img: images.tea, bg: 'bg-[#F2C051]', textColor: 'text-[#4A3B32]' },
+                                    { title: 'PURE\nSAFFRON', cat: 'Pure Saffron', img: images.saffron, bg: 'bg-paidhu-maroon', textColor: 'text-white' },
+                                    { title: 'BLOOM\nCOOKIES', cat: 'Bloom Cookies', img: images.cookies, bg: 'bg-paidhu-peach', textColor: 'text-paidhu-slate' },
+                                    { title: 'MEDLEY\nTEAS', cat: 'Medley Teas', img: images.tea, bg: 'bg-paidhu-mint', textColor: 'text-paidhu-slate' },
+                                    { title: 'PETAL\nJAMS', cat: 'Petal Jams', img: images.jam, bg: 'bg-paidhu-maroon', textColor: 'text-white' },
+                                    { title: 'WELLNESS\nPOWDERS', cat: 'Wellness Powders', img: images.bloom, bg: 'bg-paidhu-peach', textColor: 'text-paidhu-slate' },
+                                    { title: 'GIFT\nHAMPERS', cat: 'Gift Hampers', img: images.saffron, bg: 'bg-paidhu-maroon', textColor: 'text-white' },
+                                    { title: 'KIDS\nSPECIAL', cat: 'Kids Special', img: images.cookies, bg: 'bg-paidhu-peach', textColor: 'text-paidhu-slate' },
+                                    { title: 'HEALTHY\nSNACKS', cat: 'Healthy Snacks', img: images.tea, bg: 'bg-paidhu-mint', textColor: 'text-paidhu-slate' },
                                 ].map((cat, i) => (
                                     <div 
                                         key={i} 
@@ -788,7 +1109,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                 {/* Left Side (Pink + Blue + Yellow) */}
                                 <div className="flex flex-col flex-[1.5] gap-6">
                                     {/* Top Pink Box */}
-                                    <div className="bg-[#FCA5B9] rounded-[32px] p-8 flex items-center justify-end relative overflow-hidden h-[250px] cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                                    <div className="bg-paidhu-maroon rounded-[32px] p-8 flex items-center justify-end relative overflow-hidden h-[250px] cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                                         {/* Placeholder for Spoon image */}
                                         <div className="absolute -left-16 top-1/2 -translate-y-1/2 w-64 h-64 bg-white/20 rounded-full blur-3xl"></div>
                                         <img src={images.jam} alt="Slurrp It Up" className="absolute -left-10 top-1/2 -translate-y-1/2 w-64 h-64 object-cover mix-blend-multiply opacity-90 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-700 rounded-full" />
@@ -802,31 +1123,31 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     {/* Bottom Row (Blue & Yellow) */}
                                     <div className="flex flex-col sm:flex-row gap-6 h-auto sm:h-[250px]">
                                         {/* Blue Box - WhatsApp / Community */}
-                                        <div className="flex-1 bg-[#93D5F0] rounded-[32px] p-6 md:p-8 relative overflow-hidden flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                                        <div className="flex-1 bg-paidhu-mint rounded-[32px] p-6 md:p-8 relative overflow-hidden flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                                             <div className="absolute top-6 left-6 bg-white p-3 rounded-full shadow-md z-10 group-hover:scale-110 transition-transform">
                                                 <svg className="w-10 h-10 text-green-500" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.66-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
                                             </div>
                                             <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-white/20 rounded-full blur-2xl"></div>
-                                            <h4 className="text-3xl md:text-4xl font-brand font-black text-[#C1272D] relative z-10 text-right drop-shadow-sm">Join Our<br/>Community</h4>
+                                            <h4 className="text-3xl md:text-4xl font-brand font-black text-paidhu-maroon relative z-10 text-right drop-shadow-sm">Join Our<br/>Community</h4>
                                         </div>
 
                                         {/* Yellow Box - Easy / Pancakes */}
-                                        <div className="flex-1 bg-[#F9C846] rounded-[32px] p-6 md:p-8 relative overflow-hidden flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                                        <div className="flex-1 bg-paidhu-peach rounded-[32px] p-6 md:p-8 relative overflow-hidden flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                                             <img src={images.cookies} alt="Easy Pancakes" className="absolute -left-8 -top-8 w-48 h-48 object-cover mix-blend-multiply opacity-80 group-hover:scale-110 transition-transform duration-700 rounded-full" />
                                             <div className="absolute right-0 bottom-0 w-64 h-64 bg-white/20 rounded-full blur-2xl"></div>
-                                            <h4 className="text-3xl md:text-4xl font-brand font-black text-[#C1272D] relative z-10 text-right drop-shadow-sm">Quick &<br/>Easy</h4>
+                                            <h4 className="text-3xl md:text-4xl font-brand font-black text-paidhu-maroon relative z-10 text-right drop-shadow-sm">Quick &<br/>Easy</h4>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Right Side (Orange Tall Box) */}
-                                <div className="flex-1 bg-[#F2C051] rounded-[32px] p-8 md:p-10 relative overflow-hidden min-h-[300px] lg:min-h-[524px] flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                                <div className="flex-1 bg-paidhu-mint rounded-[32px] p-8 md:p-10 relative overflow-hidden min-h-[300px] lg:min-h-[524px] flex flex-col justify-end cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                                     <div className="absolute -right-20 top-0 w-full h-full bg-white/10 rounded-full blur-3xl"></div>
                                     <img src={images.bloom} alt="Travel Friendly Products" className="absolute -right-10 md:-right-20 top-10 w-72 md:w-[450px] h-72 md:h-[450px] object-contain group-hover:scale-105 group-hover:-rotate-3 transition-transform duration-700" />
                                     
                                     <div className="relative z-10 text-right mt-auto pt-48 lg:pt-0">
-                                        <h4 className="text-4xl md:text-5xl font-brand font-black text-[#5C4033] tracking-wide drop-shadow-sm">Travel</h4>
-                                        <p className="text-xl font-brand font-bold text-[#5C4033]/80 mt-1">On-the-go wellness</p>
+                                        <h4 className="text-4xl md:text-5xl font-brand font-black text-paidhu-maroon tracking-wide drop-shadow-sm">Travel</h4>
+                                        <p className="text-xl font-brand font-bold text-paidhu-slate/80 mt-1">On-the-go wellness</p>
                                     </div>
                                 </div>
                             </div>
@@ -834,7 +1155,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                     </section>
 
                     {/* ── VIDEO SECTION (Real Food, Really Easy) ── */}
-                    <section className="py-24 px-6 relative overflow-hidden bg-[#FDCB33]">
+                    <section className="py-24 px-6 relative overflow-hidden bg-paidhu-peach">
                         {/* Decorative Clouds */}
                         <svg className="absolute top-12 left-4 md:left-20 w-32 md:w-48 h-auto text-white opacity-90 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M17.5 19c2.485 0 4.5-2.015 4.5-4.5S19.985 10 17.5 10c-.17 0-.336.015-.498.041C16.402 7.72 14.372 6 12 6c-2.373 0-4.402 1.72-4.998 4.041-.162-.026-.328-.041-.498-.041-2.485 0-4.5 2.015-4.5 4.5S4.015 19 6.5 19h11z"/>
@@ -846,8 +1167,8 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         <div className="max-w-5xl mx-auto space-y-12 relative z-10 text-center">
                             {/* Title */}
                             <h2 className="text-5xl md:text-7xl font-brand font-black drop-shadow-sm tracking-wide">
-                                <span className="text-[#C1272D]">Real Food, </span>
-                                <span className="text-[#5C4033]">Really Easy</span>
+                                <span className="text-paidhu-maroon">Real Food, </span>
+                                <span className="text-paidhu-slate">Really Easy</span>
                             </h2>
 
                             {/* Video Container */}
@@ -883,7 +1204,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                             <svg className="w-64 h-64 text-paidhu-maroon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-.9 0-1.7.3-2.3.8-1-.8-2.3-1.2-3.7-1.2-3.3 0-6 2.7-6 6 0 1.4.4 2.7 1.2 3.7-.5.6-.8 1.4-.8 2.3 0 2.2 1.8 4 4 4 1.4 0 2.7-.4 3.7-1.2.6.5 1.4.8 2.3.8s1.7-.3 2.3-.8c1 .8 2.3 1.2 3.7 1.2 3.3 0 6-2.7 6-6 0-1.4-.4-2.7-1.2-3.7.5-.6.8-1.4.8-2.3 0-2.2-1.8-4-4-4-1.4 0-2.7.4-3.7 1.2-.6-.5-1.4-.8-2.3-.8zm0 2c.6 0 1.2.2 1.7.5-1.1.9-1.7 2.3-1.7 3.5 0 1.2.6 2.6 1.7 3.5-.5.3-1.1.5-1.7.5s-1.2-.2-1.7-.5c1.1-.9 1.7-2.3 1.7-3.5 0-1.2-.6-2.6-1.7-3.5.5-.3 1.1-.5 1.7-.5z"/></svg>
                         </div>
                         <div className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 opacity-20 pointer-events-none">
-                            <svg className="w-64 h-64 text-paidhu-yellow" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-.9 0-1.7.3-2.3.8-1-.8-2.3-1.2-3.7-1.2-3.3 0-6 2.7-6 6 0 1.4.4 2.7 1.2 3.7-.5.6-.8 1.4-.8 2.3 0 2.2 1.8 4 4 4 1.4 0 2.7-.4 3.7-1.2.6.5 1.4.8 2.3.8s1.7-.3 2.3-.8c1 .8 2.3 1.2 3.7 1.2 3.3 0 6-2.7 6-6 0-1.4-.4-2.7-1.2-3.7.5-.6.8-1.4.8-2.3 0-2.2-1.8-4-4-4-1.4 0-2.7.4-3.7 1.2-.6-.5-1.4-.8-2.3-.8zm0 2c.6 0 1.2.2 1.7.5-1.1.9-1.7 2.3-1.7 3.5 0 1.2.6 2.6 1.7 3.5-.5.3-1.1.5-1.7.5s-1.2-.2-1.7-.5c1.1-.9 1.7-2.3 1.7-3.5 0-1.2-.6-2.6-1.7-3.5.5-.3 1.1-.5 1.7-.5z"/></svg>
+                            <svg className="w-64 h-64 text-paidhu-peach" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-.9 0-1.7.3-2.3.8-1-.8-2.3-1.2-3.7-1.2-3.3 0-6 2.7-6 6 0 1.4.4 2.7 1.2 3.7-.5.6-.8 1.4-.8 2.3 0 2.2 1.8 4 4 4 1.4 0 2.7-.4 3.7-1.2.6.5 1.4.8 2.3.8s1.7-.3 2.3-.8c1 .8 2.3 1.2 3.7 1.2 3.3 0 6-2.7 6-6 0-1.4-.4-2.7-1.2-3.7.5-.6.8-1.4.8-2.3 0-2.2-1.8-4-4-4-1.4 0-2.7.4-3.7 1.2-.6-.5-1.4-.8-2.3-.8zm0 2c.6 0 1.2.2 1.7.5-1.1.9-1.7 2.3-1.7 3.5 0 1.2.6 2.6 1.7 3.5-.5.3-1.1.5-1.7.5s-1.2-.2-1.7-.5c1.1-.9 1.7-2.3 1.7-3.5 0-1.2-.6-2.6-1.7-3.5.5-.3 1.1-.5 1.7-.5z"/></svg>
                         </div>
 
                         <div className="max-w-7xl mx-auto space-y-16 relative z-10">
@@ -1135,7 +1456,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                             <div className="space-y-8">
                                 <h2 className="text-5xl lg:text-6xl font-brand font-bold text-paidhu-slate leading-tight">
                                     Got Questions? <br/>
-                                    <span className="text-paidhu-teal">Let's Chat!</span>
+                                    <span className="text-paidhu-maroon">Let's Chat!</span>
                                 </h2>
                                 <p className="text-xl text-gray-500 font-bold leading-relaxed max-w-lg">
                                     Whether you're curious about our Kashmiri Saffron or want to know more about our floral teas, we're here to help.
@@ -1143,7 +1464,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                 <div className="flex flex-col gap-6">
                                     <div className="flex items-center gap-4 bg-white p-6 rounded-3xl border-2 border-paidhu-peach shadow-sm">
                                         <div className="w-12 h-12 bg-paidhu-mint rounded-full flex items-center justify-center">
-                                            <Sparkles className="w-6 h-6 text-paidhu-teal" />
+                                            <Sparkles className="w-6 h-6 text-paidhu-maroon" />
                                         </div>
                                         <p className="text-lg font-brand font-bold text-paidhu-slate">Pure & Hand-picked Quality</p>
                                     </div>
@@ -1178,7 +1499,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                 </div>
                                 <button 
                                     onClick={() => { setSelectedShopCategory('All'); setCurrentView('shopAll'); }}
-                                    className="bg-paidhu-peach text-paidhu-slate px-6 py-3 rounded-full font-brand font-bold hover:bg-paidhu-yellow transition-colors shadow-sm"
+                                    className="bg-paidhu-peach text-paidhu-slate px-6 py-3 rounded-full font-brand font-bold hover:bg-paidhu-peach transition-colors shadow-sm"
                                 >
                                     View All Products
                                 </button>
@@ -1188,7 +1509,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
                                 {products.length === 0 ? (
                                     <div className="col-span-full text-center py-16 bg-paidhu-cream rounded-3xl border-2 border-dashed border-paidhu-peach">
-                                        <Smile className="w-16 h-16 text-paidhu-yellow mx-auto mb-4" />
+                                        <Smile className="w-16 h-16 text-paidhu-peach mx-auto mb-4" />
                                         <p className="text-paidhu-slate font-brand font-bold text-2xl">No products yet! Admin needs to add some yummies.</p>
                                     </div>
                                 ) : (
@@ -1200,12 +1521,12 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                                         ON SALE!
                                                     </div>
                                                 )}
-                                                {prod.category === 'Petal Jam' && (
-                                                    <div className="absolute top-3 right-3 bg-paidhu-teal text-white text-[10px] font-brand font-bold uppercase tracking-widest px-3 py-1.5 rounded-full z-10 shadow-sm">
-                                                        Natural Bloom
+                                                {prod.tag && (
+                                                    <div className="absolute top-3 right-3 bg-paidhu-maroon text-white text-[10px] font-brand font-bold uppercase tracking-widest px-3 py-1.5 rounded-full z-10 shadow-sm">
+                                                        {prod.tag}
                                                     </div>
                                                 )}
-                                                <img src={prod.image_url || images.saffron} alt={prod.name} className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-500" />
+                                                <img src={getImageUrl(prod.image_url)} alt={prod.name} className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-500" />
                                                 
                                                 {/* WISHLIST TOGGLE */}
                                                 <button 
@@ -1229,12 +1550,12 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                             <div className="flex flex-col flex-1 px-2">
                                                 <div className="flex items-center gap-1 mb-2">
                                                     {[...Array(5)].map((_, j) => (
-                                                        <Star key={j} className={`w-3.5 h-3.5 ${j < 5 ? 'text-paidhu-yellow fill-paidhu-yellow' : 'text-gray-200'}`} />
+                                                        <Star key={j} className={`w-3.5 h-3.5 ${j < 5 ? 'text-paidhu-peach fill-paidhu-peach' : 'text-gray-200'}`} />
                                                     ))}
                                                     <span className="text-[10px] font-bold text-gray-400 ml-1">(12 reviews)</span>
                                                 </div>
                                                 <h3 className="text-lg font-brand font-bold text-paidhu-slate mb-1 line-clamp-2 leading-tight group-hover:text-paidhu-maroon transition-colors">{prod.name}</h3>
-                                                <p className="text-[11px] font-bold text-paidhu-teal uppercase tracking-wider mb-4">{prod.category}</p>
+                                                <p className="text-[11px] font-bold text-paidhu-maroon uppercase tracking-wider mb-4">{prod.category}</p>
 
                                                 <div className="mt-auto flex items-center justify-between">
                                                     <div className="flex flex-col">
@@ -1275,7 +1596,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     </p>
                                 </div>
                                 <div className="space-y-6">
-                                    <h4 className="text-sm font-brand font-bold uppercase tracking-widest text-paidhu-yellow">Shop Yummies</h4>
+                                    <h4 className="text-sm font-brand font-bold uppercase tracking-widest text-paidhu-peach">Shop Yummies</h4>
                                     <ul className="space-y-4">
                                         {['All Products', 'Cereals', 'Pancakes', 'Milk Mixes', 'Combos'].map(link => (
                                             <li key={link}>
@@ -1291,13 +1612,13 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     </ul>
                                 </div>
                                 <div className="space-y-6">
-                                    <h4 className="text-sm font-brand font-bold uppercase tracking-widest text-paidhu-yellow">Get in Touch</h4>
+                                    <h4 className="text-sm font-brand font-bold uppercase tracking-widest text-paidhu-peach">Get in Touch</h4>
                                     <ul className="space-y-4 text-base font-bold text-white/80">
                                         <li>hello@paidhu.com</li>
                                         <li>1-800-YUMMY</li>
                                         <li className="pt-4 flex gap-4">
                                             <a href="#" className="bg-white/10 p-3 rounded-full hover:bg-paidhu-maroon transition-colors"><Camera className="w-5 h-5 text-white" /></a>
-                                            <a href="#" className="bg-white/10 p-3 rounded-full hover:bg-paidhu-teal transition-colors"><Globe className="w-5 h-5 text-white" /></a>
+                                            <a href="#" className="bg-white/10 p-3 rounded-full hover:bg-paidhu-maroon transition-colors"><Globe className="w-5 h-5 text-white" /></a>
                                         </li>
                                     </ul>
                                 </div>
@@ -1315,11 +1636,11 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             {isLoginModalOpen && (
                 <div className="fixed inset-0 bg-paidhu-slate/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
                     <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden transform transition-all border-4 border-paidhu-peach">
-                        <div className="bg-paidhu-yellow px-8 py-5 flex justify-between items-center text-paidhu-slate">
+                        <div className="bg-paidhu-peach px-8 py-5 flex justify-between items-center text-paidhu-slate">
                             <div className="flex items-center gap-3">
-                                <Smile className="w-8 h-8 text-paidhu-maroon" />
+                                <img src={images.logo} alt="Paidhu" className="h-8 object-contain" />
                                 <h2 className="font-brand text-2xl font-bold">
-                                    {selectedProductForLogin ? `Unlock Module` : (loginRole === 'admin' ? 'Admin Portal' : 'Welcome!')}
+                                    {selectedProductForLogin ? `Unlock Module` : (loginRole === 'admin' ? 'Paidhu.com Admin Portal' : 'Welcome!')}
                                 </h2>
                             </div>
                             <button onClick={() => { setIsLoginModalOpen(false); setSelectedProductForLogin(null); }} className="hover:bg-white/50 p-2 rounded-full transition-colors">
@@ -1328,7 +1649,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         </div>
                         <div className="p-8">
                             {selectedProductForLogin && (
-                                <div className="bg-paidhu-mint border-2 border-paidhu-teal/30 text-paidhu-teal text-sm p-4 rounded-2xl mb-6 font-bold text-center font-brand">
+                                <div className="bg-paidhu-mint border-2 border-paidhu-maroon/30 text-paidhu-maroon text-sm p-4 rounded-2xl mb-6 font-bold text-center font-brand">
                                     Log in to unlock the fun {selectedProductForLogin.name} module! ✨
                                 </div>
                             )}
@@ -1340,19 +1661,19 @@ export default function LandingPage({ onStart }: LandingPageProps) {
 
                             <form className="space-y-5" onSubmit={handleAuthSubmit}>
                                 {authMessage.text && (
-                                    <div className={`p-4 rounded-xl text-sm font-bold border-2 ${authMessage.type === 'error' ? 'bg-red-50 text-paidhu-maroon border-red-100' : 'bg-paidhu-mint text-paidhu-teal border-paidhu-teal/30'}`}>{authMessage.text}</div>
+                                    <div className={`p-4 rounded-xl text-sm font-bold border-2 ${authMessage.type === 'error' ? 'bg-red-50 text-paidhu-maroon border-red-100' : 'bg-paidhu-mint text-paidhu-maroon border-paidhu-maroon/30'}`}>{authMessage.text}</div>
                                 )}
                                 {authMode === 'register' && (
-                                    <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Full Name</label><input type="text" value={authFormData.fullName} onChange={e => setAuthFormData({ ...authFormData, fullName: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-yellow outline-none rounded-2xl font-bold transition-colors" /></div>
+                                    <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Full Name</label><input type="text" value={authFormData.fullName} onChange={e => setAuthFormData({ ...authFormData, fullName: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-peach outline-none rounded-2xl font-bold transition-colors" /></div>
                                 )}
-                                <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Email ID</label><input type="email" value={authFormData.email} onChange={e => setAuthFormData({ ...authFormData, email: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-yellow outline-none rounded-2xl font-bold transition-colors" /></div>
+                                <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Email ID</label><input type="email" value={authFormData.email} onChange={e => setAuthFormData({ ...authFormData, email: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-peach outline-none rounded-2xl font-bold transition-colors" /></div>
                                 {authMode === 'register' ? (
                                     <>
-                                        <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Phone Number</label><input type="tel" value={authFormData.phone} onChange={e => setAuthFormData({ ...authFormData, phone: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-yellow outline-none rounded-2xl font-bold transition-colors" /></div>
-                                        <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Password</label><input type="password" value={authFormData.password} onChange={e => setAuthFormData({ ...authFormData, password: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-yellow outline-none rounded-2xl font-bold transition-colors" /></div>
+                                        <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Phone Number</label><input type="tel" value={authFormData.phone} onChange={e => setAuthFormData({ ...authFormData, phone: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-peach outline-none rounded-2xl font-bold transition-colors" /></div>
+                                        <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Password</label><input type="password" value={authFormData.password} onChange={e => setAuthFormData({ ...authFormData, password: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-peach outline-none rounded-2xl font-bold transition-colors" /></div>
                                     </>
                                 ) : (
-                                    <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Password</label><input type="password" value={authFormData.password} onChange={e => setAuthFormData({ ...authFormData, password: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-yellow outline-none rounded-2xl font-bold transition-colors" /></div>
+                                    <div><label className="block text-xs font-bold text-paidhu-slate uppercase tracking-wider mb-2">Password</label><input type="password" value={authFormData.password} onChange={e => setAuthFormData({ ...authFormData, password: e.target.value })} required className="w-full px-5 py-4 bg-paidhu-cream border-2 border-paidhu-peach focus:border-paidhu-peach outline-none rounded-2xl font-bold transition-colors" /></div>
                                 )}
                                 <button type="submit" className="w-full bg-paidhu-maroon text-white font-brand font-bold text-lg py-5 rounded-2xl hover:bg-paidhu-maroon/90 hover:-translate-y-1 transition-all mt-8 shadow-lg border-b-4 border-paidhu-maroon/50">
                                     {selectedProductForLogin ? 'Gain Access' : (authMode === 'login' ? 'Login Securely' : 'Join the Family')}
@@ -1364,117 +1685,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             )}
 
 
-            {/* PRODUCT DETAIL MODAL */}
-            {selectedProduct && (
-                <div className="fixed inset-0 bg-paidhu-slate/60 backdrop-blur-md z-[150] flex items-center justify-center p-4 lg:p-10">
-                    <div className="bg-paidhu-cream rounded-[40px] shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col lg:flex-row border-8 border-white relative animate-in zoom-in-95 duration-300">
-                        <button onClick={() => setSelectedProduct(null)} className="absolute top-6 right-6 z-30 bg-white shadow-md p-3 rounded-full hover:bg-red-50 transition-colors">
-                            <X className="w-6 h-6 text-paidhu-maroon" />
-                        </button>
 
-
-                        {/* Left: Gallery */}
-                        <div className="lg:w-1/2 bg-white p-8 lg:p-12 flex flex-col">
-                            <div className="flex-1 bg-paidhu-cream rounded-3xl overflow-hidden mb-6 flex items-center justify-center p-10 relative">
-                                {selectedProduct.on_sale && (
-                                    <div className="absolute top-5 left-5 bg-paidhu-maroon text-white font-brand font-bold px-6 py-2 rounded-full shadow-lg z-10 rotate-12">ON SALE!</div>
-                                )}
-                                <img src={selectedProduct.image_url} alt={selectedProduct.name} className="max-w-full max-h-full object-contain" />
-                            </div>
-                            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-                                {[selectedProduct.image_url, ...parseField(selectedProduct.gallery_images)].map((img, idx) => (
-                                    <div key={idx} className="w-24 h-24 bg-paidhu-cream rounded-2xl flex-shrink-0 border-2 border-transparent hover:border-paidhu-yellow cursor-pointer overflow-hidden p-2 transition-all">
-                                        <img src={img} className="w-full h-full object-contain" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-
-                        {/* Right: Info */}
-                        <div className="lg:w-1/2 p-8 lg:p-12 overflow-y-auto custom-scrollbar flex flex-col">
-                            <div className="space-y-6 flex-1">
-                                <div className="space-y-2">
-                                    <p className="text-paidhu-teal font-brand font-bold uppercase tracking-widest text-sm">{selectedProduct.category}</p>
-                                    <h2 className="text-4xl lg:text-5xl font-brand font-bold text-paidhu-slate leading-tight">{selectedProduct.name}</h2>
-                                    <div className="flex items-center gap-4 pt-2">
-                                        <div className="flex gap-1">
-                                            {[...Array(5)].map((_, j) => <Star key={j} className="w-5 h-5 text-paidhu-yellow fill-paidhu-yellow" />)}
-                                        </div>
-                                        <span className="text-sm font-bold text-gray-400">5.0 (24 Customer Reviews)</span>
-                                    </div>
-                                </div>
-
-
-                                <div className="flex items-baseline gap-4">
-                                    {selectedProduct.on_sale && selectedProduct.original_price && (
-                                        <span className="text-2xl text-gray-400 line-through font-bold">₹{parseFloat(selectedProduct.original_price).toFixed(0)}</span>
-                                    )}
-                                    <p className="text-5xl font-brand font-bold text-paidhu-maroon">₹{parseFloat(selectedProduct.price).toFixed(0)}</p>
-                                </div>
-
-
-                                <p className="text-lg text-paidhu-slate/70 leading-relaxed font-bold">{selectedProduct.short_description}</p>
-
-
-                                {/* Tabs */}
-                                <div className="pt-8">
-                                    <div className="flex border-b-2 border-gray-100 gap-8 mb-6">
-                                        {['description', 'additional', 'benefits'].map(tab => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setActiveDetailTab(tab)}
-                                                className={`pb-4 text-sm font-brand font-bold uppercase tracking-widest transition-all relative ${activeDetailTab === tab ? 'text-paidhu-teal' : 'text-gray-400'}`}
-                                            >
-                                                {tab}
-                                                {activeDetailTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-paidhu-teal rounded-full" />}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="text-paidhu-slate/80 font-bold leading-relaxed animate-in fade-in duration-500">
-
-                                        {activeDetailTab === 'description' && <p>{selectedProduct.description || 'No description provided.'}</p>}
-                                        {activeDetailTab === 'additional' && (
-                                            <div className="space-y-4">
-                                                {parseField(selectedProduct.additional_info).length > 0 ? (
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        {parseField(selectedProduct.additional_info).map((info: string, idx: number) => (
-                                                            <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border-2 border-gray-50">{info}</div>
-                                                        ))}
-                                                    </div>
-                                                ) : <p>No additional information available.</p>}
-                                            </div>
-                                        )}
-                                        {activeDetailTab === 'benefits' && (
-                                            <ul className="space-y-3">
-                                                {parseField(selectedProduct.benefits).map((b: string, i: number) => (
-                                                    <li key={i} className="flex items-center gap-3"><div className="w-2 h-2 bg-paidhu-yellow rounded-full" /> {b}</li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="pt-10 flex flex-col sm:flex-row gap-4">
-                                <button
-                                    onClick={() => addToCart(selectedProduct)}
-                                    className="flex-1 bg-paidhu-teal text-white py-5 rounded-2xl text-xl font-brand font-bold shadow-xl hover:bg-paidhu-teal/90 hover:-translate-y-1 transition-all border-b-4 border-paidhu-teal/50 flex items-center justify-center gap-3"
-                                >
-                                    <ShoppingCart className="w-6 h-6" />
-                                    Add to Yummy Cart
-                                </button>
-                                <button
-                                    onClick={() => triggerProductLogin(selectedProduct)}
-                                    className="px-8 py-5 bg-paidhu-yellow text-paidhu-slate rounded-2xl text-xl font-brand font-bold shadow-xl hover:bg-paidhu-yellow/90 hover:-translate-y-1 transition-all border-b-4 border-paidhu-yellow/50"
-                                >
-                                    Unlock Module
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* CART DRAWER */}
             {isCartOpen && (
@@ -1494,23 +1705,30 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                             {cart.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
-                                    <Smile className="w-20 h-20 text-paidhu-yellow" />
+                                    <Smile className="w-20 h-20 text-paidhu-peach" />
                                     <p className="text-xl font-brand font-bold text-paidhu-slate">Cart is empty!</p>
-                                    <button onClick={() => setIsCartOpen(false)} className="bg-paidhu-teal text-white px-8 py-3 rounded-xl font-brand font-bold">Start Shopping</button>
+                                    <button onClick={() => setIsCartOpen(false)} className="bg-paidhu-maroon text-white px-8 py-3 rounded-xl font-brand font-bold">Start Shopping</button>
                                 </div>
                             ) : (
                                 cart.map((item) => (
-                                    <div key={item.cartId} className="flex gap-4 bg-paidhu-cream p-4 rounded-[24px] border-2 border-paidhu-peach relative group">
+                                    <div 
+                                        key={item.cartId} 
+                                        onClick={() => { setSelectedProduct(item); setIsCartOpen(false); }}
+                                        className="flex gap-4 bg-paidhu-cream p-4 rounded-[24px] border-2 border-paidhu-peach relative group cursor-pointer hover:border-paidhu-maroon/30 transition-all"
+                                    >
                                         <div className="w-20 h-20 bg-white rounded-xl overflow-hidden p-2 flex-shrink-0">
-                                            <img src={item.image_url} className="w-full h-full object-contain" />
+                                            <img src={getImageUrl(item.image_url)} className="w-full h-full object-contain" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h4 className="font-brand font-bold text-paidhu-slate truncate pr-8">{item.name}</h4>
-                                            <p className="text-xs text-paidhu-teal font-bold uppercase tracking-wider mb-2">{item.category}</p>
+                                            <p className="text-xs text-paidhu-maroon font-bold uppercase tracking-wider mb-2">{item.category}</p>
                                             <p className="text-lg font-brand font-bold text-paidhu-maroon">₹{parseFloat(item.price).toFixed(0)}</p>
                                         </div>
                                         <button
-                                            onClick={() => removeFromCart(item.cartId)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                removeFromCart(item.cartId);
+                                            }}
                                             className="absolute top-2 right-2 p-2 text-gray-300 hover:text-paidhu-maroon transition-colors"
                                         >
                                             <Trash2 className="w-5 h-5" />
@@ -1526,7 +1744,10 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                     <span className="text-lg font-brand font-bold text-gray-500 uppercase tracking-widest">Total Amount</span>
                                     <span className="text-4xl font-brand font-bold text-paidhu-slate">₹{cartTotal.toFixed(0)}</span>
                                 </div>
-                                <button className="w-full bg-paidhu-teal text-white py-5 rounded-2xl text-xl font-brand font-bold shadow-xl hover:bg-paidhu-teal/90 hover:-translate-y-1 transition-all border-b-4 border-paidhu-teal/50 flex items-center justify-center gap-3">
+                                <button 
+                                    onClick={() => { setIsCartOpen(false); setCurrentView('checkout'); }}
+                                    className="w-full bg-paidhu-maroon text-white py-5 rounded-2xl text-xl font-brand font-bold shadow-xl hover:bg-paidhu-maroon/90 hover:-translate-y-1 transition-all border-b-4 border-paidhu-maroon/50 flex items-center justify-center gap-3"
+                                >
                                     Checkout Now 🚀
                                 </button>
                                 <p className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Safe & Secure Payment</p>
@@ -1541,7 +1762,7 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                 <div className="fixed inset-0 z-[200] overflow-hidden">
                     <div className="absolute inset-0 bg-paidhu-slate/40 backdrop-blur-sm" onClick={() => setIsWishlistOpen(false)} />
                     <div className="absolute inset-y-0 right-0 max-w-md w-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-500">
-                        <div className="bg-paidhu-teal p-8 text-white flex justify-between items-center">
+                        <div className="bg-paidhu-maroon p-8 text-white flex justify-between items-center">
                             <div className="flex items-center gap-3">
                                 <Heart className="w-8 h-8 fill-white" />
                                 <h2 className="text-2xl font-brand font-bold">My Wishlist</h2>
@@ -1556,32 +1777,40 @@ export default function LandingPage({ onStart }: LandingPageProps) {
                                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-40">
                                     <Heart className="w-20 h-20 text-paidhu-peach" />
                                     <p className="text-xl font-brand font-bold text-paidhu-slate">Wishlist is empty!</p>
-                                    <button onClick={() => setIsWishlistOpen(false)} className="bg-paidhu-teal text-white px-8 py-3 rounded-xl font-brand font-bold">Explore Yummies</button>
+                                    <button onClick={() => setIsWishlistOpen(false)} className="bg-paidhu-maroon text-white px-8 py-3 rounded-xl font-brand font-bold">Explore Yummies</button>
                                 </div>
                             ) : (
                                 wishlist.map((item) => (
-                                    <div key={item.id} className="flex gap-4 bg-paidhu-cream p-4 rounded-[24px] border-2 border-paidhu-peach relative group">
+                                    <div 
+                                        key={item.id} 
+                                        onClick={() => { setSelectedProduct(item); setIsWishlistOpen(false); }}
+                                        className="flex gap-4 bg-paidhu-cream p-4 rounded-[24px] border-2 border-paidhu-peach relative group cursor-pointer hover:border-paidhu-maroon/30 transition-all"
+                                    >
                                         <div className="w-20 h-20 bg-white rounded-xl overflow-hidden p-2 flex-shrink-0">
-                                            <img src={item.image_url} className="w-full h-full object-contain" />
+                                            <img src={getImageUrl(item.image_url)} className="w-full h-full object-contain" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h4 className="font-brand font-bold text-paidhu-slate truncate pr-8">{item.name}</h4>
-                                            <p className="text-xs text-paidhu-teal font-bold uppercase tracking-wider mb-2">{item.category}</p>
+                                            <p className="text-xs text-paidhu-maroon font-bold uppercase tracking-wider mb-2">{item.category}</p>
                                             <div className="flex items-center justify-between mt-2">
                                                 <p className="text-lg font-brand font-bold text-paidhu-maroon">₹{parseFloat(item.price).toFixed(0)}</p>
                                                 <button 
-                                                    onClick={() => {
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
                                                         addToCart(item);
                                                         toggleWishlist(item); // Remove from wishlist after adding to cart
                                                     }}
-                                                    className="bg-paidhu-teal text-white px-4 py-1.5 rounded-lg text-xs font-brand font-bold hover:bg-paidhu-teal/90 transition-all shadow-sm"
+                                                    className="bg-paidhu-maroon text-white px-4 py-1.5 rounded-lg text-xs font-brand font-bold hover:bg-paidhu-maroon/90 transition-all shadow-sm"
                                                 >
                                                     Move to Cart
                                                 </button>
                                             </div>
                                         </div>
                                         <button
-                                            onClick={() => toggleWishlist(item)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleWishlist(item);
+                                            }}
                                             className="absolute top-2 right-2 p-2 text-gray-300 hover:text-paidhu-maroon transition-colors"
                                         >
                                             <Trash2 className="w-5 h-5" />

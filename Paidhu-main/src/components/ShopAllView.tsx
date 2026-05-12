@@ -6,13 +6,21 @@ interface ShopAllViewProps {
     wishlist: any[];
     addToCart: (product: any) => void;
     toggleWishlist: (product: any) => void;
+    onProductClick: (product: any) => void;
     initialCategory?: string;
 }
 
-export default function ShopAllView({ products, wishlist, addToCart, toggleWishlist, initialCategory = 'All' }: ShopAllViewProps) {
+export default function ShopAllView({ products, wishlist, addToCart, toggleWishlist, onProductClick, initialCategory = 'All' }: ShopAllViewProps) {
     const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortOrder, setSortOrder] = useState<'featured' | 'price-low' | 'price-high'>('featured');
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+
+    const getImageUrl = (url: string) => {
+        if (!url) return images.saffron;
+        if (url.startsWith('http')) return url;
+        return `${API_URL}${url}`;
+    };
 
     // Extract unique categories from active products
     const categories = useMemo(() => {
@@ -64,7 +72,7 @@ export default function ShopAllView({ products, wishlist, addToCart, toggleWishl
                         Curated Selection
                     </span>
                     <h1 className="text-5xl md:text-7xl font-brand font-black text-white drop-shadow-sm">
-                        Shop All <span className="text-paidhu-yellow">Products</span>
+                        Shop All <span className="text-paidhu-peach">Products</span>
                     </h1>
                     <p className="text-lg md:text-xl text-white/90 max-w-2xl mx-auto font-sans font-medium">
                         Discover our complete range of 100% natural, premium Kashmiri saffron, exquisite floral blends, and healthy indulgences.
@@ -155,17 +163,21 @@ export default function ShopAllView({ products, wishlist, addToCart, toggleWishl
                     {filteredProducts.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
                             {filteredProducts.map((prod) => (
-                                <div key={prod.id} className="group flex flex-col bg-white rounded-[32px] p-5 border-2 border-paidhu-peach/20 hover:border-paidhu-maroon/20 hover:shadow-2xl transition-all duration-500 relative">
+                                <div 
+                                    key={prod.id} 
+                                    onClick={() => onProductClick(prod)}
+                                    className="group flex flex-col bg-white rounded-[32px] p-5 border-2 border-paidhu-peach/20 hover:border-paidhu-maroon/20 hover:shadow-2xl transition-all duration-500 relative cursor-pointer"
+                                >
                                     {/* Badge */}
                                     {prod.category === 'Bestsellers' || parseFloat(prod.price) < 500 ? (
-                                        <div className="absolute top-4 left-4 z-10 bg-paidhu-yellow text-paidhu-slate text-[10px] font-black uppercase px-3 py-1.5 rounded-full shadow-sm tracking-widest">
+                                        <div className="absolute top-4 left-4 z-10 bg-paidhu-peach text-paidhu-slate text-[10px] font-black uppercase px-3 py-1.5 rounded-full shadow-sm tracking-widest">
                                             Must Have
                                         </div>
                                     ) : null}
 
                                     {/* Image */}
                                     <div className="aspect-square w-full mb-6 bg-paidhu-cream/50 rounded-[24px] overflow-hidden p-6 relative group-hover:bg-paidhu-peach/30 transition-colors duration-500 flex items-center justify-center">
-                                        <img src={prod.image_url || images.saffron} alt={prod.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700" />
+                                        <img src={getImageUrl(prod.image_url)} alt={prod.name} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-700" />
                                         
                                         {/* Wishlist Toggle */}
                                         <button 
@@ -185,14 +197,17 @@ export default function ShopAllView({ products, wishlist, addToCart, toggleWishl
                                         <div className="flex items-center gap-3 pt-1">
                                             <span className="text-2xl font-brand font-black text-paidhu-maroon">₹{parseFloat(prod.price).toFixed(0)}</span>
                                             <span className="text-sm text-gray-400 line-through font-bold">₹{(parseFloat(prod.price) * 1.2).toFixed(0)}</span>
-                                            <span className="bg-paidhu-mint text-paidhu-teal text-[10px] font-black px-2 py-1 rounded-lg">20% OFF</span>
+                                            <span className="bg-paidhu-mint text-paidhu-maroon text-[10px] font-black px-2 py-1 rounded-lg">20% OFF</span>
                                         </div>
                                     </div>
 
                                     {/* Add to Cart Footer */}
                                     <div className="mt-6">
                                         <button 
-                                            onClick={() => addToCart(prod)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addToCart(prod);
+                                            }}
                                             className="w-full bg-paidhu-maroon text-white py-4 rounded-2xl font-brand font-bold text-lg flex items-center justify-between px-6 hover:bg-paidhu-maroon/90 transition-all shadow-lg hover:-translate-y-1 active:scale-95 border-b-4 border-paidhu-maroon/50"
                                         >
                                             <span>Add To Cart</span>

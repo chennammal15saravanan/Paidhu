@@ -30,6 +30,9 @@ services:
       - JWT_SECRET=supersecretpaidhukey123
     depends_on:
       - db
+    volumes:
+      - ./server:/app
+      - /app/node_modules
 
   frontend:
     build:
@@ -42,6 +45,9 @@ services:
       - VITE_API_URL=http://localhost:5001
     depends_on:
       - backend
+    volumes:
+      - .:/app
+      - /app/node_modules
 
 volumes:
   db_data:
